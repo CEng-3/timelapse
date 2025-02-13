@@ -14,7 +14,7 @@ if not os.path.exists(saveDir):
     os.makedirs(saveDir)
 
 # Set up a log file
-logging.basicConfig(filename=f"{saveDir/".log"}", level=logging.DEBUG)
+logging.basicConfig(filename=f"{saveDir}/.log_file", level=logging.DEBUG)
 logging.debug(f" /\/\ Timelapse Log - starting for {saveDir} /\/\ ")
 
 imageCount = 1
@@ -34,10 +34,10 @@ while imageCount < maxImages:
     imgHeight = 600 # Max = 2592 / 1296 (HDR mode)
     print(f"Image captured at {hour}:{minute} - saving...")
 
-    imagePath = saveDir / f"{textImageCount}_{hour}-{minute}"
+    imagePath = os.path.join(saveDir, f"{imageCount:04d}.jpg")
 
-    # Capture image using raspistill
-    subprocess.run(["raspistill", "-w", str(imgWidth), "-h", str(imgHeight), "-o", str(imagePath), "-sh", "40", "-awb", "auto", "-mm", "average", "-v"], check=True)
+    # Capture image using libcamera
+    subprocess.run(["libcamera-still", "-o", imagePath, "--width", str(imgWidth), "--height", str(imgHeight), "--sharpness", "40", "--awb", "auto", "--metering", "average", "-v"], check=True)
     logging.debug(f" > Image saved at {hour}:{minute} to directory {saveDir} as {imageCount}_{str(hour)}_{str(minute)}.jpg")
 
     imageCount += 1

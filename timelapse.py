@@ -21,8 +21,7 @@ if not os.path.exists(save_dir):
 
 # Set up a log file
 log_file = os.path.join(save_dir, "log_file.log")
-logging.basicConfig(filename=log_file, level=logging.DEBUG)
-logging.debug(f" /\/\ Timelapse Log - starting for {save_dir} /\/\ ")
+logging.basicConfig(filename=log_file, level=logging.DEBUG, format="%(message)s")
 
 start_time = None
 image_count = 1
@@ -31,11 +30,10 @@ if os.path.exists(log_file):
     with open(log_file, "r") as log_file:
         lines = log_file.readlines()
         if lines:
-            last_line = lines[-1].strip()
-            parts = last_line.split()
-            if len(parts) >= 3:
-                image_count = int(parts[1]) + 1 # Resume from the last image + 1
-                start_time = datetime.fromisoformat(parts[2]) # Recover start time
+            last_line = lines[-1].strip().split(" ")
+            if len(last_line) >= 3 and last_line[0].isdigit():
+                image_count = int(last_line[0]) + 1 # Resume from the last image + 1
+                start_time = datetime.fromisoformat(last_line[2]) # Recover start time
 
 if start_time is None:
     start_time = datetime.now()
@@ -61,6 +59,6 @@ print("Image capture completed.")
 video_path = os.path.join(save_dir, f"timelapse_{year}-{month}-{day}.mp4")
 
 # Create timelapse using ffmpeg
-subprocess.run(["ffmpeg", "-framerate", "6", "-i", os.path.join(save_dir, "%04d.jpg"), "-c:v", "libx264", "-pix_fmt", "yuv420p", "-vf", "scale=1280:720", video_path], check=True)
+subprocess.run(["ffmpeg", "-framerate", "1", "-i", os.path.join(save_dir, "%04d.jpg"), "-c:v", "libx264", "-pix_fmt", "yuv420p", "-vf", "scale=1280:720", video_path], check=True)
 logging.debug(f" > Timelapse saved as {video_path}")
 print(f"Timelapse created as {video_path}")

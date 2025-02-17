@@ -33,10 +33,14 @@ if os.path.exists(log_file):
             last_line = lines[-1].strip().split(" ")
             if len(last_line) >= 3 and last_line[0].isdigit():
                 image_count = int(last_line[0]) + 1 # Resume from the last image + 1
-                start_time = datetime.fromisoformat(last_line[2]) # Recover start time
+                try:
+                    start_time = datetime.fromisoformat(last_line[1]) # Recover start time
+                except ValueError:
+                    logging.warning("Invalid start time in log, resetting to current time.")
 
 if start_time is None:
     start_time = datetime.now()
+    logging.info(f"Starting new session at {start_time.isoformat()}")
 
 while datetime.now() - start_time < capture_duration:
     image_name = f"{image_count:04d}.jpg"
@@ -45,7 +49,10 @@ while datetime.now() - start_time < capture_duration:
     # Capture image with error handling
     try:
         subprocess.run(["libcamera-still", "-o", image_path, "--width", str(image_width), "--height", str(image_height), "--sharpness", "40", "--awb", "auto", "--metering", "average", "-v"], check=True)
-        logging.info(f"{image_count} {datetime.now().isoformat()} - captured {image_path}")
+        if os.path.exists(image_path):
+            logging.info(f"{image_count} {datetime.now().isoformat()} - captured {image_path}")
+        else:
+            logging.warning(f"Image {image_path} missing after capture attempt!")
     except subprocess.CalledProcessError as e:
         logging.error(f"Camera error: {e}")
         time.sleep(60) # Wait before retrying

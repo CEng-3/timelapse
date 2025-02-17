@@ -35,20 +35,26 @@ if os.path.exists(log_file):
                 image_count = int(last_line[0]) + 1 # Resume from the last image + 1
                 try:
                     start_time = datetime.fromisoformat(last_line[1]) # Recover start time
+                    print(f"Recovered start_time from log: {start_time}")
                 except ValueError:
                     logging.warning("Invalid start time in log, resetting to current time.")
+                    start_time = None # Reset if invalid, forgot to add this
 
 if start_time is None:
     start_time = datetime.now()
+    print(f"Starting new session at {start_time}")
     logging.info(f"Starting new session at {start_time.isoformat()}")
 
 while datetime.now() - start_time < capture_duration:
+    elapsed_time = datetime.now() - start_time # Just for debugging
+    print(f"Elapsed time: {elapsed_time}, capture duration: {capture_duration}")
+
     image_name = f"{image_count:04d}.jpg"
     image_path = os.path.join(save_dir, image_name)
 
     # Capture image with error handling
     try:
-        subprocess.run(["libcamera-still", "-o", image_path, "--width", str(image_width), "--height", str(image_height), "--sharpness", "40", "--awb", "auto", "--metering", "average", "-v"], check=True)
+        subprocess.run(["libcamera-still", "-o", image_path, "--width", str(image_width), "--height", str(image_height), "--sharpness", "40", "--awb", "auto", "--metering", "average", "-v"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=True)
         if os.path.exists(image_path):
             logging.info(f"{image_count} {datetime.now().isoformat()} - captured {image_path}")
         else:
@@ -59,6 +65,7 @@ while datetime.now() - start_time < capture_duration:
         continue
 
     image_count += 1
+    print(f"Captured {image_name}, waiting {capture_interval} seconds...")
     time.sleep(capture_interval)
 
 print("Image capture completed.")
@@ -66,6 +73,6 @@ print("Image capture completed.")
 video_path = os.path.join(save_dir, f"timelapse_{year}-{month}-{day}.mp4")
 
 # Create timelapse using ffmpeg
-subprocess.run(["ffmpeg", "-framerate", "1", "-i", os.path.join(save_dir, "%04d.jpg"), "-c:v", "libx264", "-pix_fmt", "yuv420p", "-vf", "scale=1280:720", video_path], check=True)
+subprocess.run(["ffmpeg", "-framerate", "1", "-i", os.path.join(save_dir, "%04d.jpg"), "-c:v", "libx264", "-pix_fmt", "yuv420p", "-vf", "scale=1280:720", video_path], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=True)
 logging.debug(f" > Timelapse saved as {video_path}")
 print(f"Timelapse created as {video_path}")

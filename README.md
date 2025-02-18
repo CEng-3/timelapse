@@ -10,7 +10,7 @@ sudo apt update && sudo apt upgrade -y && sudo apt install git -y
 ```
 2. Change directory to the home directory and clone the GitHub repository
 ```
-cd .
+cd
 git clone https://github.com/CEng-3/timelapse.git
 ```
 3. After Git has cloned the repository, change into the directory

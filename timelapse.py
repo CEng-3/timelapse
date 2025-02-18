@@ -73,6 +73,14 @@ print("Image capture completed.")
 video_path = os.path.join(save_dir, f"timelapse_{year}-{month}-{day}.mp4")
 
 # Create timelapse using ffmpeg
-subprocess.run(["ffmpeg", "-framerate", "1", "-i", os.path.join(save_dir, "%04d.jpg"), "-c:v", "libx264", "-pix_fmt", "yuv420p", "-vf", "scale=1280:720", video_path], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=True)
+subprocess.run([
+    "ffmpeg", "-framerate", "1", "-pattern_type", "glob",
+    "-i", os.path.join(save_dir, "*.jpg"),
+    "-c:v", "libx264", "-pix_fmt", "yuv420p",
+    "-vf", "scale=1280:720,setpts=N/FRAME_RATE/TB",
+    "-r", "1", "-vsync", "vfr",
+    video_path
+], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=True)
+
 logging.debug(f" > Timelapse saved as {video_path}")
 print(f"Timelapse created as {video_path}")

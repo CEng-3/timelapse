@@ -1,14 +1,14 @@
-#
-# TODO: Organise variable names
-
 from datetime import datetime, timedelta
 import os, time, logging, subprocess
 
-capture_duration = timedelta(hours=12)
-capture_interval = 600 # 10 minutes
+#capture_duration = timedelta(hours=12)
+#capture_interval = 600 # 10 minutes
 
-image_width = 800 # Max: 4608 / 2304 (HDR mode)
-image_height = 600 # Max: 2592 / 1296 (HDR mode)
+capture_duration = timedelta(minutes=1)
+capture_interval = 10
+
+image_width = 4608 # Max: 4608 / 2304 (HDR mode)
+image_height = 2592 # Max: 2592 / 1296 (HDR mode)
 
 # Determine start time for purpose of creating directories
 d = datetime.now()

@@ -7,8 +7,8 @@ import os, time, logging, subprocess
 capture_duration = timedelta(minutes=1)
 capture_interval = 10
 
-image_width = 4608 # Max: 4608 / 2304 (HDR mode)
-image_height = 2592 # Max: 2592 / 1296 (HDR mode)
+image_width = 1280 # Max: 4608 / 2304 (HDR mode)
+image_height = 720 # Max: 2592 / 1296 (HDR mode)
 
 # Determine start time for purpose of creating directories
 d = datetime.now()
@@ -85,8 +85,7 @@ subprocess.run([
     "-i", os.path.join(save_dir, "*.jpg"),
     "-c:v", "libx264", "-pix_fmt", "yuv420p",
     "-vf", "scale=1280:720",
-    "-r", "1", "-vsync", "vfr",
-    "-t", str(video_duration),
+    "-r", "1", "-vsync", "passthrough",
     video_path
 ], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=True)
 

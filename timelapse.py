@@ -76,13 +76,17 @@ print("Image capture completed.")
 
 video_path = os.path.join(save_dir, f"timelapse_{year}-{month}-{day}.mp4")
 
+num_images = len([f for f in os.listdir(save_dir) if f.endswith(".jpg")])
+video_duration = num_images  # Since framerate is 1 FPS, duration = number of frames
+
 # Create timelapse using ffmpeg
 subprocess.run([
     "ffmpeg", "-framerate", "1", "-pattern_type", "glob",
     "-i", os.path.join(save_dir, "*.jpg"),
     "-c:v", "libx264", "-pix_fmt", "yuv420p",
-    "-vf", "scale=1280:720,setpts=N/FRAME_RATE/TB",
+    "-vf", "scale=1280:720",
     "-r", "1", "-vsync", "vfr",
+    "-t", str(video_duration),
     video_path
 ], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=True)
 

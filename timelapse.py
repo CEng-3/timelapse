@@ -54,7 +54,11 @@ while datetime.now() - start_time < capture_duration:
 
     # Capture image with error handling
     try:
-        subprocess.run(["libcamera-still", "-o", image_path, "--width", str(image_width), "--height", str(image_height), "--sharpness", "40", "--awb", "auto", "--metering", "average", "-v"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=True)
+        subprocess.run([
+            "libcamera-still", "-o", image_path, "-t", "1000", "-n",
+            "--width", str(image_width), "--height", str(image_height)
+        ], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=True)
+
         if os.path.exists(image_path):
             logging.info(f"{image_count} {datetime.now().isoformat()} - captured {image_path}")
         else:

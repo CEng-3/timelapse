@@ -81,28 +81,26 @@ image_files = sorted(glob.glob(os.path.join(save_dir, "*.jpg")))
 num_images = len(image_files)
 print(f"Total images captured: {num_images}")
 
-# Create absolute file paths for ffmpeg
-try:
-    # Create timelapse using ffmpeg with explicit input list of absolute paths
-    image_list_path = os.path.join(save_dir, "image_list.txt")
-    with open(image_list_path, "w") as f:
-        for img in image_files:
-            # Use absolute path to ensure ffmpeg can find the files
-            abs_img_path = os.path.abspath(img)
-            f.write(f"file '{abs_img_path}'\n")
-    
-    # Verify the image list file
-    with open(image_list_path, 'r') as f:
-        print("Image list contents:")
-        print(f.read())
+# Verify we have multiple images
+if num_images < 2:
+    print("Not enough images to create timelapse. Exiting.")
+    logging.error("Insufficient images to create timelapse")
+    exit(1)
 
-    # Create timelapse using ffmpeg with input list
+# Create timelapse using ffmpeg with explicit duration calculation
+try:
+    # Create timelapse using ffmpeg with more explicit settings
     ffmpeg_cmd = [
-        "ffmpeg", "-f", "concat", "-safe", "0", 
-        "-i", image_list_path,
-        "-c:v", "libx264", "-pix_fmt", "yuv420p",
-        "-vf", "scale=1280:720",
-        "-r", "1", 
+        "ffmpeg", 
+        "-framerate", "1",  # 1 frame per second
+        "-pattern_type", "glob", 
+        "-i", os.path.join(save_dir, "*.jpg"),
+        "-c:v", "libx264", 
+        "-pix_fmt", "yuv420p",
+        "-vf", f"scale={image_width}:{image_height}",
+        "-r", "1",  # output framerate
+        "-g", "1",  # keyframe every frame
+        "-shortest",  # ensure full length
         video_path
     ]
     
@@ -128,6 +126,24 @@ try:
     # Raise an exception if the return code is non-zero
     if result.returncode != 0:
         raise subprocess.CalledProcessError(result.returncode, ffmpeg_cmd, result.stdout, result.stderr)
+
+    # Verify video file exists and has some size
+    if os.path.exists(video_path):
+        video_size = os.path.getsize(video_path)
+        print(f"Video created. Size: {video_size} bytes")
+        
+        # Optional: Get video duration using ffprobe
+        try:
+            duration_result = subprocess.run([
+                "ffprobe", 
+                "-v", "error", 
+                "-show_entries", "format=duration", 
+                "-of", "default=noprint_wrappers=1:nokey=1", 
+                video_path
+            ], capture_output=True, text=True)
+            print(f"Video duration: {duration_result.stdout.strip()} seconds")
+        except Exception as e:
+            print(f"Could not get video duration: {e}")
 
 except Exception as e:
     logging.error(f"Error creating timelapse: {e}")

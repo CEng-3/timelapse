@@ -19,7 +19,8 @@ if not os.path.exists(save_dir):
 
 # Set up a log file
 log_file = os.path.join(save_dir, "log_file.log")
-logging.basicConfig(filename=log_file, level=logging.DEBUG, format="%(message)s")
+logging.basicConfig(filename=log_file, level=logging.DEBUG, 
+                    format='%(asctime)s - %(levelname)s - %(message)s')
 
 start_time = None
 image_count = 1
@@ -80,20 +81,57 @@ image_files = sorted(glob.glob(os.path.join(save_dir, "*.jpg")))
 num_images = len(image_files)
 print(f"Total images captured: {num_images}")
 
-# Create timelapse using ffmpeg with explicit input list
-with open(os.path.join(save_dir, "image_list.txt"), "w") as f:
-    for img in image_files:
-        f.write(f"file '{img}'\n")
+# Create absolute file paths for ffmpeg
+try:
+    # Create timelapse using ffmpeg with explicit input list of absolute paths
+    image_list_path = os.path.join(save_dir, "image_list.txt")
+    with open(image_list_path, "w") as f:
+        for img in image_files:
+            # Use absolute path to ensure ffmpeg can find the files
+            abs_img_path = os.path.abspath(img)
+            f.write(f"file '{abs_img_path}'\n")
+    
+    # Verify the image list file
+    with open(image_list_path, 'r') as f:
+        print("Image list contents:")
+        print(f.read())
 
-# Create timelapse using ffmpeg with input list
-subprocess.run([
-    "ffmpeg", "-f", "concat", "-safe", "0", 
-    "-i", os.path.join(save_dir, "image_list.txt"),
-    "-c:v", "libx264", "-pix_fmt", "yuv420p",
-    "-vf", "scale=1280:720",
-    "-r", "1", 
-    video_path
-], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=True)
+    # Create timelapse using ffmpeg with input list
+    ffmpeg_cmd = [
+        "ffmpeg", "-f", "concat", "-safe", "0", 
+        "-i", image_list_path,
+        "-c:v", "libx264", "-pix_fmt", "yuv420p",
+        "-vf", "scale=1280:720",
+        "-r", "1", 
+        video_path
+    ]
+    
+    print("Executing ffmpeg command:", " ".join(ffmpeg_cmd))
+    
+    # Run ffmpeg with detailed error logging
+    result = subprocess.run(
+        ffmpeg_cmd, 
+        stdout=subprocess.PIPE, 
+        stderr=subprocess.PIPE, 
+        text=True, 
+        check=False
+    )
+    
+    # Log the detailed output
+    logging.info(f"FFmpeg stdout: {result.stdout}")
+    logging.error(f"FFmpeg stderr: {result.stderr}")
+    
+    # Print the output for immediate visibility
+    print("FFmpeg stdout:", result.stdout)
+    print("FFmpeg stderr:", result.stderr)
+    
+    # Raise an exception if the return code is non-zero
+    if result.returncode != 0:
+        raise subprocess.CalledProcessError(result.returncode, ffmpeg_cmd, result.stdout, result.stderr)
+
+except Exception as e:
+    logging.error(f"Error creating timelapse: {e}")
+    print(f"Error creating timelapse: {e}")
 
 logging.debug(f" > Timelapse saved as {video_path}")
 print(f"Timelapse created as {video_path}")

@@ -1,8 +1,6 @@
 from datetime import datetime, timedelta
 import os, time, logging, subprocess
-
-#capture_duration = timedelta(hours=12)
-#capture_interval = 600 # 10 minutes
+import glob
 
 capture_duration = timedelta(minutes=1)
 capture_interval = 10
@@ -38,7 +36,7 @@ if os.path.exists(log_file):
                     print(f"Recovered start_time from log: {start_time}")
                 except ValueError:
                     logging.warning("Invalid start time in log, resetting to current time.")
-                    start_time = None # Reset if invalid, forgot to add this
+                    start_time = None
 
 if start_time is None:
     start_time = datetime.now()
@@ -49,6 +47,7 @@ while datetime.now() - start_time < capture_duration:
     elapsed_time = datetime.now() - start_time # Just for debugging
     print(f"Elapsed time: {elapsed_time}, capture duration: {capture_duration}")
 
+    # Ensure 4-digit zero-padded filename for correct sorting
     image_name = f"{image_count:04d}.jpg"
     image_path = os.path.join(save_dir, image_name)
 
@@ -76,16 +75,23 @@ print("Image capture completed.")
 
 video_path = os.path.join(save_dir, f"timelapse_{year}-{month}-{day}.mp4")
 
-num_images = len([f for f in os.listdir(save_dir) if f.endswith(".jpg")])
-video_duration = num_images  # Since framerate is 1 FPS, duration = number of frames
+# Use sorted glob to ensure correct image order
+image_files = sorted(glob.glob(os.path.join(save_dir, "*.jpg")))
+num_images = len(image_files)
+print(f"Total images captured: {num_images}")
 
-# Create timelapse using ffmpeg
+# Create timelapse using ffmpeg with explicit input list
+with open(os.path.join(save_dir, "image_list.txt"), "w") as f:
+    for img in image_files:
+        f.write(f"file '{img}'\n")
+
+# Create timelapse using ffmpeg with input list
 subprocess.run([
-    "ffmpeg", "-framerate", "1", "-pattern_type", "glob",
-    "-i", os.path.join(save_dir, "*.jpg"),
+    "ffmpeg", "-f", "concat", "-safe", "0", 
+    "-i", os.path.join(save_dir, "image_list.txt"),
     "-c:v", "libx264", "-pix_fmt", "yuv420p",
     "-vf", "scale=1280:720",
-    "-r", "1", "-vsync", "passthrough",
+    "-r", "1", 
     video_path
 ], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=True)
 

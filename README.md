@@ -17,7 +17,7 @@ git clone https://github.com/CEng-3/timelapse.git
 ```
 cd timelapse
 ```
-4. Run the script - no dependencies are required, so there's no need to create a virtual environment
+4. Run
 ```
 python3 timelapse.py
 ```

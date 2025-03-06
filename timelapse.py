@@ -18,31 +18,53 @@ if not os.path.exists(save_dir):
     os.makedirs(save_dir)
 
 # Set up a log file
-log_file = os.path.join(save_dir, "log_file.log")
-logging.basicConfig(filename=log_file, level=logging.DEBUG, 
+log_filepath = os.path.join(save_dir, "log_file.log")
+logging.basicConfig(filename=log_filepath, level=logging.DEBUG, 
                     format='%(asctime)s - %(levelname)s - %(message)s')
+
+# Define a specific format for recovery information
+# This makes it easier to find and parse
+def log_capture_state(image_number, start_time_iso):
+    logging.info(f"CAPTURE_STATE: image_count={image_number}, start_time={start_time_iso}")
 
 start_time = None
 image_count = 1
 
-if os.path.exists(log_file):
-    with open(log_file, "r") as log_file:
-        lines = log_file.readlines()
-        if lines:
-            last_line = lines[-1].strip().split(" ")
-            if len(last_line) >= 3 and last_line[0].isdigit():
-                image_count = int(last_line[0]) + 1 # Resume from the last image + 1
-                try:
-                    start_time = datetime.fromisoformat(last_line[1]) # Recover start time
-                    print(f"Recovered start_time from log: {start_time}")
-                except ValueError:
-                    logging.warning("Invalid start time in log, resetting to current time.")
-                    start_time = None
+# Try to recover from previous run
+if os.path.exists(log_filepath):
+    try:
+        with open(log_filepath, "r") as log_file:
+            lines = log_file.readlines()
+            # Look for the most recent CAPTURE_STATE entry
+            for line in reversed(lines):
+                if "CAPTURE_STATE:" in line:
+                    parts = line.strip().split("CAPTURE_STATE: ")[1]
+                    # Parse key=value pairs
+                    state_parts = parts.split(", ")
+                    for part in state_parts:
+                        if part.startswith("image_count="):
+                            image_count = int(part.split("=")[1])
+                        elif part.startswith("start_time="):
+                            try:
+                                start_time_str = part.split("=")[1]
+                                start_time = datetime.fromisoformat(start_time_str)
+                                print(f"Recovered start_time from log: {start_time}")
+                                print(f"Recovered image_count from log: {image_count}")
+                            except ValueError:
+                                logging.warning("Invalid start time in log, resetting to current time.")
+                                start_time = None
+                    break
+    except Exception as e:
+        logging.error(f"Error reading log file: {e}")
+        start_time = None
 
 if start_time is None:
     start_time = datetime.now()
     print(f"Starting new session at {start_time}")
     logging.info(f"Starting new session at {start_time.isoformat()}")
+
+# Log initial state
+log_capture_state(image_count, start_time.isoformat())
 
 while datetime.now() - start_time < capture_duration:
     elapsed_time = datetime.now() - start_time # Just for debugging
@@ -60,7 +82,9 @@ while datetime.now() - start_time < capture_duration:
         ], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=True)
 
         if os.path.exists(image_path):
-            logging.info(f"{image_count} {datetime.now().isoformat()} - captured {image_path}")
+            logging.info(f"Captured image: {image_name}")
+            # Update capture state after each successful capture
+            log_capture_state(image_count, start_time.isoformat())
         else:
             logging.warning(f"Image {image_path} missing after capture attempt!")
     except subprocess.CalledProcessError as e:

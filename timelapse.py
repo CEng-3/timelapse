@@ -1,9 +1,11 @@
 from datetime import datetime, timedelta
 import os, time, logging, subprocess
 import glob
+import math
 
+# Configuration
 capture_duration = timedelta(minutes=1)
-capture_interval = 10
+capture_interval = 10  # seconds between photos
 
 image_width = 1280 # Max: 4608 / 2304 (HDR mode)
 image_height = 720 # Max: 2592 / 1296 (HDR mode)
@@ -18,34 +20,122 @@ if not os.path.exists(save_dir):
     os.makedirs(save_dir)
 
 # Set up a log file
-log_file = os.path.join(save_dir, "log_file.log")
-logging.basicConfig(filename=log_file, level=logging.DEBUG, 
+log_filepath = os.path.join(save_dir, "log_file.log")
+logging.basicConfig(filename=log_filepath, level=logging.DEBUG, 
                     format='%(asctime)s - %(levelname)s - %(message)s')
+
+# Define a specific format for recovery information
+# This makes it easier to find and parse
+def log_capture_state(image_number, start_time_iso, last_capture_time_iso):
+    logging.info(f"CAPTURE_STATE: image_count={image_number}, start_time={start_time_iso}, last_capture_time={last_capture_time_iso}")
 
 start_time = None
 image_count = 1
+last_capture_time = None
+is_recovery = False
 
-if os.path.exists(log_file):
-    with open(log_file, "r") as log_file:
-        lines = log_file.readlines()
-        if lines:
-            last_line = lines[-1].strip().split(" ")
-            if len(last_line) >= 3 and last_line[0].isdigit():
-                image_count = int(last_line[0]) + 1 # Resume from the last image + 1
-                try:
-                    start_time = datetime.fromisoformat(last_line[1]) # Recover start time
-                    print(f"Recovered start_time from log: {start_time}")
-                except ValueError:
-                    logging.warning("Invalid start time in log, resetting to current time.")
-                    start_time = None
+# Try to recover from previous run
+if os.path.exists(log_filepath):
+    try:
+        with open(log_filepath, "r") as log_file:
+            lines = log_file.readlines()
+            # Look for the most recent CAPTURE_STATE entry
+            for line in reversed(lines):
+                if "CAPTURE_STATE:" in line:
+                    parts = line.strip().split("CAPTURE_STATE: ")[1]
+                    # Parse key=value pairs
+                    state_parts = parts.split(", ")
+                    recovery_data = {}
+                    
+                    for part in state_parts:
+                        key_value = part.split("=", 1)
+                        if len(key_value) == 2:
+                            key, value = key_value
+                            recovery_data[key] = value
+                    
+                    try:
+                        if "image_count" in recovery_data:
+                            # Important: increment the image count from the log
+                            # so we don't overwrite the previous image
+                            image_count = int(recovery_data["image_count"]) + 1
+                            is_recovery = True
+                        
+                        if "start_time" in recovery_data:
+                            start_time = datetime.fromisoformat(recovery_data["start_time"])
+                        
+                        if "last_capture_time" in recovery_data:
+                            last_capture_time = datetime.fromisoformat(recovery_data["last_capture_time"])
+                        
+                        print(f"Recovered from log: image_count={image_count} (incremented), start_time={start_time}")
+                        if last_capture_time:
+                            print(f"Last capture was at: {last_capture_time}")
+                    except ValueError as e:
+                        logging.warning(f"Error parsing recovery data: {e}, resetting")
+                        start_time = None
+                        last_capture_time = None
+                    
+                    break
+    except Exception as e:
+        logging.error(f"Error reading log file: {e}")
+        start_time = None
+        last_capture_time = None
+
+# Verify image count against existing files to avoid duplicates
+if os.path.exists(save_dir):
+    existing_images = sorted(glob.glob(os.path.join(save_dir, "*.jpg")))
+    if existing_images:
+        # Extract the highest image number from existing files
+        highest_num = 0
+        for img_path in existing_images:
+            img_name = os.path.basename(img_path)
+            try:
+                num = int(os.path.splitext(img_name)[0])
+                highest_num = max(highest_num, num)
+            except ValueError:
+                continue
+        
+        # Make sure our counter is higher than any existing image
+        image_count = max(image_count, highest_num + 1)
+        print(f"Highest image number found: {highest_num}, next image will be: {image_count}")
 
 if start_time is None:
+    # Start a new session
     start_time = datetime.now()
+    last_capture_time = None
     print(f"Starting new session at {start_time}")
     logging.info(f"Starting new session at {start_time.isoformat()}")
 
+# Calculate when the next photo should be taken based on the schedule
+now = datetime.now()
+
+# If we have a last capture time, calculate when the next one should be
+if last_capture_time:
+    # Calculate how many intervals have elapsed since the last capture
+    time_since_last_capture = now - last_capture_time
+    intervals_elapsed = time_since_last_capture.total_seconds() / capture_interval
+    
+    # If less than one interval has passed, wait for the remainder
+    if intervals_elapsed < 1:
+        wait_time = capture_interval - time_since_last_capture.total_seconds()
+        print(f"Resuming: Waiting {wait_time:.1f} seconds to maintain schedule")
+        time.sleep(wait_time)
+    else:
+        # If we're late by more than one interval
+        intervals_to_skip = math.floor(intervals_elapsed)
+        print(f"Resuming: {intervals_to_skip} intervals elapsed since last capture")
+        print("Taking a photo immediately and then resuming schedule")
+
+# Only log initial state if this is not a recovery
+if not is_recovery:
+    current_time = datetime.now()
+    if last_capture_time is None:
+        last_capture_time = current_time
+    log_capture_state(image_count - 1, start_time.isoformat(), last_capture_time.isoformat())
+
+# Main capture loop
 while datetime.now() - start_time < capture_duration:
-    elapsed_time = datetime.now() - start_time # Just for debugging
+    current_time = datetime.now()
+    elapsed_time = current_time - start_time
     print(f"Elapsed time: {elapsed_time}, capture duration: {capture_duration}")
 
     # Ensure 4-digit zero-padded filename for correct sorting
@@ -60,7 +150,11 @@ while datetime.now() - start_time < capture_duration:
         ], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=True)
 
         if os.path.exists(image_path):
-            logging.info(f"{image_count} {datetime.now().isoformat()} - captured {image_path}")
+            # Update the last capture time to now
+            last_capture_time = datetime.now()
+            logging.info(f"Captured image: {image_name}")
+            # Update capture state after each successful capture
+            log_capture_state(image_count, start_time.isoformat(), last_capture_time.isoformat())
         else:
             logging.warning(f"Image {image_path} missing after capture attempt!")
     except subprocess.CalledProcessError as e:
@@ -74,6 +168,7 @@ while datetime.now() - start_time < capture_duration:
 
 print("Image capture completed.")
 
+# Rest of your code for video generation remains unchanged
 video_path = os.path.join(save_dir, f"timelapse_{year}-{month}-{day}.mp4")
 
 # Use sorted glob to ensure correct image order

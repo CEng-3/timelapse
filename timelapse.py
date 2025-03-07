@@ -32,6 +32,7 @@ def log_capture_state(image_number, start_time_iso, last_capture_time_iso):
 start_time = None
 image_count = 1
 last_capture_time = None
+is_recovery = False
 
 # Try to recover from previous run
 if os.path.exists(log_filepath):
@@ -54,7 +55,10 @@ if os.path.exists(log_filepath):
                     
                     try:
                         if "image_count" in recovery_data:
-                            image_count = int(recovery_data["image_count"])
+                            # Important: increment the image count from the log
+                            # so we don't overwrite the previous image
+                            image_count = int(recovery_data["image_count"]) + 1
+                            is_recovery = True
                         
                         if "start_time" in recovery_data:
                             start_time = datetime.fromisoformat(recovery_data["start_time"])
@@ -62,7 +66,7 @@ if os.path.exists(log_filepath):
                         if "last_capture_time" in recovery_data:
                             last_capture_time = datetime.fromisoformat(recovery_data["last_capture_time"])
                         
-                        print(f"Recovered from log: image_count={image_count}, start_time={start_time}")
+                        print(f"Recovered from log: image_count={image_count} (incremented), start_time={start_time}")
                         if last_capture_time:
                             print(f"Last capture was at: {last_capture_time}")
                     except ValueError as e:
@@ -75,6 +79,24 @@ if os.path.exists(log_filepath):
         logging.error(f"Error reading log file: {e}")
         start_time = None
         last_capture_time = None
+
+# Verify image count against existing files to avoid duplicates
+if os.path.exists(save_dir):
+    existing_images = sorted(glob.glob(os.path.join(save_dir, "*.jpg")))
+    if existing_images:
+        # Extract the highest image number from existing files
+        highest_num = 0
+        for img_path in existing_images:
+            img_name = os.path.basename(img_path)
+            try:
+                num = int(os.path.splitext(img_name)[0])
+                highest_num = max(highest_num, num)
+            except ValueError:
+                continue
+        
+        # Make sure our counter is higher than any existing image
+        image_count = max(image_count, highest_num + 1)
+        print(f"Highest image number found: {highest_num}, next image will be: {image_count}")
 
 if start_time is None:
     # Start a new session
@@ -103,11 +125,12 @@ if last_capture_time:
         print(f"Resuming: {intervals_to_skip} intervals elapsed since last capture")
         print("Taking a photo immediately and then resuming schedule")
 
-# Log initial state (with current time as last_capture_time if starting fresh)
-current_time = datetime.now()
-if last_capture_time is None:
-    last_capture_time = current_time
-log_capture_state(image_count, start_time.isoformat(), last_capture_time.isoformat())
+# Only log initial state if this is not a recovery
+if not is_recovery:
+    current_time = datetime.now()
+    if last_capture_time is None:
+        last_capture_time = current_time
+    log_capture_state(image_count - 1, start_time.isoformat(), last_capture_time.isoformat())
 
 # Main capture loop
 while datetime.now() - start_time < capture_duration:

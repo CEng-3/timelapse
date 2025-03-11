@@ -2,10 +2,17 @@ from datetime import datetime, timedelta
 import os, time, logging, subprocess
 import glob
 import math
+import subprocess
 
 # Configuration
 capture_duration = timedelta(minutes=1)
 capture_interval = 10  # seconds between photos
+
+# Don't change
+send_timelapse = False
+PI_A_IP = "192.168.64.121"
+SEND_DIR = "/home/raspberry/site/static/timelapse/piB/"
+LOCAL_SAVE_DIR = "/home/raspberry/site/static/timelapse/piA/"
 
 image_width = 1280 # Max: 4608 / 2304 (HDR mode)
 image_height = 720 # Max: 2592 / 1296 (HDR mode)
@@ -15,7 +22,7 @@ d = datetime.now()
 year, month, day = f"{d.year:04d}", f"{d.month:02d}", f"{d.day:02d}"
 hour, minute = f"{d.hour:02d}", f"{d.minute:02d}"
 
-save_dir = f"timelapse_{year}-{month}-{day}"
+save_dir = f"image/timelapse_{year}_{month}_{day}"
 if not os.path.exists(save_dir):
     os.makedirs(save_dir)
 
@@ -168,8 +175,11 @@ while datetime.now() - start_time < capture_duration:
 
 print("Image capture completed.")
 
-# Rest of your code for video generation remains unchanged
-video_path = os.path.join(save_dir, f"timelapse_{year}-{month}-{day}.mp4")
+# Change video_path to root directory or LOCAL_SAVE_DIR based on send_timelapse
+if send_timelapse:
+    video_path = f"timelapse_{year}_{month}_{day}.mp4"
+else:
+    video_path = os.path.join(LOCAL_SAVE_DIR, f"timelapse_{year}_{month}_{day}.mp4")
 
 # Use sorted glob to ensure correct image order
 image_files = sorted(glob.glob(os.path.join(save_dir, "*.jpg")))
@@ -246,3 +256,17 @@ except Exception as e:
 
 logging.debug(f" > Timelapse saved as {video_path}")
 print(f"Timelapse created as {video_path}")
+
+if send_timelapse:
+    print(f'Transferring {video_path} to Pi A')
+    
+    if os.path.exists(video_path):
+        try:
+            subprocess.run(["scp"], video_path, f"raspberry@{PI_A_IP}:{SEND_DIR}", check=True)
+            print('Transfer successful.')
+        except subprocess.CalledProcessError as e:
+            print(f"Error: {e}")
+    else:
+        print(f'Path {video_path} does not exist.')
+else:
+    print('Running on Pi A - no need to transfer timelapse.')

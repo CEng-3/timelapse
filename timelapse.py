@@ -9,10 +9,10 @@ capture_duration = timedelta(minutes=1)
 capture_interval = 10  # seconds between photos
 
 # Don't change
-send_timelapse = False
+send_timelapse = True
 PI_A_IP = "192.168.64.121"
-SEND_DIR = "/home/raspberry/site/static/timelapse/piB/"
-LOCAL_SAVE_DIR = "/home/raspberry/site/static/timelapse/piA/"
+SEND_DIR = "/home/raspberry/site/static/cam2/"
+LOCAL_SAVE_DIR = "/home/raspberry/site/static/cam1/"
 
 image_width = 1280 # Max: 4608 / 2304 (HDR mode)
 image_height = 720 # Max: 2592 / 1296 (HDR mode)

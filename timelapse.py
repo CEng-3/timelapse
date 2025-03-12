@@ -174,7 +174,7 @@ while datetime.now() - start_time < capture_duration:
 print("Image capture completed.")
 
 # Rest of your code for video generation remains unchanged
-video_path = os.path.join(save_dir, f"timelapse_{year}-{month}-{day}.mp4")
+video_path = os.path.join("/home/tower-garden/site/static/cam1", f"timelapse_{year}-{month}-{day}.mp4")
 
 # Use sorted glob to ensure correct image order
 image_files = sorted(glob.glob(os.path.join(save_dir, "*.jpg")))

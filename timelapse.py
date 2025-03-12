@@ -258,11 +258,14 @@ if send_video and os.path.exists(video_path):
         print(f"Transferring video to {remote_user}@{remote_host}:{remote_dir}...")
         logging.info(f"Starting transfer of {video_path} to {remote_user}@{remote_host}:{remote_dir}")
         
-        # Execute scp command to transfer the file
+        # Get the filename part without the path
+        video_filename = os.path.basename(video_path)
+        
+        # Execute scp command to transfer the file with original filename preserved
         transfer_cmd = [
             "scp",
             video_path,
-            f"{remote_user}@{remote_host}:{remote_dir}"
+            f"{remote_user}@{remote_host}:{remote_dir}/{video_filename}"
         ]
         
         result = subprocess.run(

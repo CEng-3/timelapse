@@ -4,6 +4,11 @@ import glob
 import math
 
 # Configuration
+send_video = True  # Flag to control remote transfer of completed video
+remote_host = "192.168.64.121"
+remote_user = "tower-garden"
+remote_dir = "/home/tower-garden/output"
+
 capture_duration = timedelta(minutes=1)
 capture_interval = 10  # seconds between photos
 
@@ -246,3 +251,38 @@ except Exception as e:
 
 logging.debug(f" > Timelapse saved as {video_path}")
 print(f"Timelapse created as {video_path}")
+
+# Transfer the video file to the remote host if send_video is enabled and video exists
+if send_video and os.path.exists(video_path):
+    try:
+        print(f"Transferring video to {remote_user}@{remote_host}:{remote_dir}...")
+        logging.info(f"Starting transfer of {video_path} to {remote_user}@{remote_host}:{remote_dir}")
+        
+        # Execute scp command to transfer the file
+        transfer_cmd = [
+            "scp",
+            video_path,
+            f"{remote_user}@{remote_host}:{remote_dir}"
+        ]
+        
+        result = subprocess.run(
+            transfer_cmd,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            check=True
+        )
+        
+        print(f"Video transfer completed successfully")
+        logging.info(f"Video transfer completed successfully")
+    except subprocess.CalledProcessError as e:
+        print(f"Error transferring video: {e}")
+        logging.error(f"Error transferring video: {e.stderr}")
+    except Exception as e:
+        print(f"Unexpected error during transfer: {e}")
+        logging.error(f"Unexpected error during transfer: {e}")
+else:
+    if not send_video:
+        print("Video transfer skipped (send_video flag is disabled)")
+    elif not os.path.exists(video_path):
+        print("Video transfer skipped (video file not found)")

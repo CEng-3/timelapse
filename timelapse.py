@@ -7,7 +7,7 @@ import math
 send_video = True  # Flag to control remote transfer of completed video
 remote_host = "192.168.64.121"
 remote_user = "tower-garden"
-remote_dir = "/home/tower-garden/output"
+remote_dir = "/home/tower-garden/site/static/cam2"
 
 capture_duration = timedelta(minutes=1)
 capture_interval = 10  # seconds between photos
@@ -261,26 +261,50 @@ if send_video and os.path.exists(video_path):
         # Get the filename part without the path
         video_filename = os.path.basename(video_path)
         
-        # Execute scp command to transfer the file with original filename preserved
+        # First ensure the remote directory exists
+        print("Ensuring remote directory exists...")
+        mkdir_cmd = [
+            "ssh", 
+            f"{remote_user}@{remote_host}", 
+            f"mkdir -p {remote_dir}"
+        ]
+        
+        mkdir_result = subprocess.run(
+            mkdir_cmd,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True
+        )
+        
+        if mkdir_result.returncode != 0:
+            print(f"Warning: Could not ensure remote directory exists: {mkdir_result.stderr}")
+            logging.warning(f"Failed to ensure remote directory exists: {mkdir_result.stderr}")
+        
+        # Execute scp command to transfer the file
         transfer_cmd = [
             "scp",
             video_path,
             f"{remote_user}@{remote_host}:{remote_dir}/{video_filename}"
         ]
         
+        print("Executing command:", " ".join(transfer_cmd))
+        
         result = subprocess.run(
             transfer_cmd,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             text=True,
-            check=True
+            check=False  # Don't raise exception, handle manually
         )
         
-        print(f"Video transfer completed successfully")
-        logging.info(f"Video transfer completed successfully")
-    except subprocess.CalledProcessError as e:
-        print(f"Error transferring video: {e}")
-        logging.error(f"Error transferring video: {e.stderr}")
+        if result.returncode == 0:
+            print(f"Video transfer completed successfully")
+            logging.info(f"Video transfer completed successfully")
+        else:
+            print(f"Error transferring video. Return code: {result.returncode}")
+            print(f"Error details: {result.stderr}")
+            logging.error(f"Error transferring video. Return code: {result.returncode}")
+            logging.error(f"Error details: {result.stderr}")
     except Exception as e:
         print(f"Unexpected error during transfer: {e}")
         logging.error(f"Unexpected error during transfer: {e}")

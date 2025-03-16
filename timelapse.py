@@ -173,7 +173,38 @@ while True:
     current_time = datetime.now()
     current_time_str = current_time.strftime("%H:%M:%S")
     
-    if current_time_str >= capture_window_start_str and current_time_str <= capture_window_end_str:
+    # Check if we're past the end time - if so, take one final photo and exit
+    if current_time_str > capture_window_end_str:
+        print(f"Current time {current_time_str} is past the end time {capture_window_end_str}. Taking final photo and exiting.")
+        
+        # Ensure 4-digit zero-padded filename for correct sorting
+        image_name = f"{image_count:04d}.jpg"
+        image_path = os.path.join(save_dir, image_name)
+
+        # Capture image with error handling
+        try:
+            subprocess.run([
+                "libcamera-still", "-o", image_path, "-t", "1000", "-n",
+                "--width", str(image_width), "--height", str(image_height)
+            ], check=True)  # Removed DEVNULL to see any errors
+
+            if os.path.exists(image_path):
+                # Update the last capture time to now
+                last_capture_time = current_time
+                print(f"Final photo captured: {image_name}")
+                logging.info(f"Captured final image: {image_name}")
+                # Update capture state after final capture
+                log_capture_state(image_count, sequence_start_time.isoformat(), last_capture_time.isoformat())
+            else:
+                logging.warning(f"Final image {image_path} missing after capture attempt!")
+        except subprocess.CalledProcessError as e:
+            logging.error(f"Camera error on final capture: {e}")
+        
+        print("Image capture completed. Exiting now.")
+        break  # Exit the loop immediately after taking final photo
+    
+    # If we're inside the capture window
+    elif current_time_str >= capture_window_start_str and current_time_str <= capture_window_end_str:
         # If this is our first capture ever in this sequence, set the sequence start time
         if sequence_start_time is None:
             sequence_start_time = current_time
@@ -187,25 +218,50 @@ while True:
         # Ensure 4-digit zero-padded filename for correct sorting
         image_name = f"{image_count:04d}.jpg"
         image_path = os.path.join(save_dir, image_name)
+        print(f"Taking photo: {image_name}")  # Add this to see it's actually attempting to take a photo
 
         # Capture image with error handling
         try:
-            subprocess.run([
+            # Show the actual command being executed
+            cmd = [
                 "libcamera-still", "-o", image_path, "-t", "1000", "-n",
                 "--width", str(image_width), "--height", str(image_height)
-            ], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=True)
-
+            ]
+            print(f"Executing: {' '.join(cmd)}")
+            
+            result = subprocess.run(
+                cmd, 
+                stdout=subprocess.PIPE, 
+                stderr=subprocess.PIPE, 
+                text=True,
+                check=False  # Don't raise exception so we can capture output
+            )
+            
+            if result.returncode != 0:
+                print(f"Camera command failed with code {result.returncode}:")
+                print(f"STDOUT: {result.stdout}")
+                print(f"STDERR: {result.stderr}")
+                logging.error(f"Camera error: {result.stderr}")
+                time.sleep(10)  # Wait a bit before retrying
+                continue
+            
             if os.path.exists(image_path):
                 # Update the last capture time to now
-                last_capture_time = datetime.now()
+                last_capture_time = current_time
+                print(f"Successfully captured {image_name}")
                 logging.info(f"Captured image: {image_name}")
                 # Update capture state after each successful capture
                 log_capture_state(image_count, sequence_start_time.isoformat(), last_capture_time.isoformat())
             else:
+                print(f"Image file {image_path} was not created!")
                 logging.warning(f"Image {image_path} missing after capture attempt!")
-        except subprocess.CalledProcessError as e:
-            logging.error(f"Camera error: {e}")
-            time.sleep(60) # Wait before retrying
+                time.sleep(10)  # Wait a bit before retrying
+                continue
+                
+        except Exception as e:
+            print(f"Exception during capture: {e}")
+            logging.error(f"Exception during capture: {e}")
+            time.sleep(10)  # Wait before retrying
             continue
 
         image_count += 1
@@ -213,43 +269,156 @@ while True:
         time.sleep(capture_interval)
         
         # Refresh config before next capture
+        previous_interval = capture_interval
         capture_window_start_str, capture_window_end_str, capture_interval = fetch_config()
-        print("Fetching new config...")
-        print(f"New capture window: {capture_window_start_str} - {capture_window_end_str}, " + 
-              f"new capture interval: {capture_interval}")
+        print("Fetched new config...")
+        if previous_interval != capture_interval:
+            print(f"New capture window: {capture_window_start_str} - {capture_window_end_str}, " + 
+                  f"new capture interval: {capture_interval} (was {previous_interval})")
     else:
-        if current_time_str > capture_window_end_str:
-            print(f"Current time {current_time_str} is past the end time {capture_window_end_str}. " + 
-                  f"Taking final photo and exiting.")
-            # Ensure 4-digit zero-padded filename for correct sorting
-            image_name = f"{image_count:04d}.jpg"
-            image_path = os.path.join(save_dir, image_name)
+        # Not in capture window and not past end time
+        print(f"Current time {current_time_str} is outside the capture window " +
+              f"({capture_window_start_str} - {capture_window_end_str}). Waiting...")
+        time.sleep(5)  # Check every 5 seconds if within the capture window
 
-            # Capture image with error handling
-            try:
-                subprocess.run([
-                    "libcamera-still", "-o", image_path, "-t", "1000", "-n",
-                    "--width", str(image_width), "--height", str(image_height)
-                ], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=True)
+print("Script execution complete.")
 
-                if os.path.exists(image_path):
-                    # Update the last capture time to now
-                    last_capture_time = datetime.now()
-                    logging.info(f"Captured final image: {image_name}")
-                    # Update capture state after each successful capture
-                    log_capture_state(image_count, sequence_start_time.isoformat(), last_capture_time.isoformat())
-                else:
-                    logging.warning(f"Image {image_path} missing after capture attempt!")
-            except subprocess.CalledProcessError as e:
-                logging.error(f"Camera error: {e}")
-                time.sleep(60) # Wait before retrying
-                continue
+video_path = os.path.join("/home/tower-garden/site/static/cam1", f"timelapse_{year}-{month}-{day}.mp4")
 
-            image_count += 1
-            break
+# Use sorted glob to ensure correct image order
+image_files = sorted(glob.glob(os.path.join(save_dir, "*.jpg")))
+num_images = len(image_files)
+print(f"Total images captured: {num_images}")
+
+# Verify we have multiple images
+if num_images < 2:
+    print("Not enough images to create timelapse. Exiting.")
+    logging.error("Insufficient images to create timelapse")
+    exit(1)
+
+# Create timelapse using ffmpeg with explicit duration calculation
+try:
+    # Create timelapse using ffmpeg with more explicit settings
+    ffmpeg_cmd = [
+        "ffmpeg", 
+        "-framerate", "1",  # 1 frame per second
+        "-pattern_type", "glob", 
+        "-i", os.path.join(save_dir, "*.jpg"),
+        "-c:v", "libx264", 
+        "-pix_fmt", "yuv420p",
+        "-vf", f"scale={image_width}:{image_height}",
+        "-r", "1",  # output framerate
+        "-g", "1",  # keyframe every frame
+        "-shortest",  # ensure full length
+        video_path
+    ]
+    
+    print("Executing ffmpeg command:", " ".join(ffmpeg_cmd))
+    
+    # Run ffmpeg with detailed error logging
+    result = subprocess.run(
+        ffmpeg_cmd, 
+        stdout=subprocess.PIPE, 
+        stderr=subprocess.PIPE, 
+        text=True, 
+        check=False
+    )
+    
+    # Log the detailed output
+    logging.info(f"FFmpeg stdout: {result.stdout}")
+    logging.error(f"FFmpeg stderr: {result.stderr}")
+    
+    # Print the output for immediate visibility
+    print("FFmpeg stdout:", result.stdout)
+    print("FFmpeg stderr:", result.stderr)
+    
+    # Raise an exception if the return code is non-zero
+    if result.returncode != 0:
+        raise subprocess.CalledProcessError(result.returncode, ffmpeg_cmd, result.stdout, result.stderr)
+
+    # Verify video file exists and has some size
+    if os.path.exists(video_path):
+        video_size = os.path.getsize(video_path)
+        print(f"Video created. Size: {video_size} bytes")
+        
+        # Optional: Get video duration using ffprobe
+        try:
+            duration_result = subprocess.run([
+                "ffprobe", 
+                "-v", "error", 
+                "-show_entries", "format=duration", 
+                "-of", "default=noprint_wrappers=1:nokey=1", 
+                video_path
+            ], capture_output=True, text=True)
+            print(f"Video duration: {duration_result.stdout.strip()} seconds")
+        except Exception as e:
+            print(f"Could not get video duration: {e}")
+
+except Exception as e:
+    logging.error(f"Error creating timelapse: {e}")
+    print(f"Error creating timelapse: {e}")
+
+logging.debug(f" > Timelapse saved as {video_path}")
+print(f"Timelapse created as {video_path}")
+
+# Transfer the video file to the remote host if send_video is enabled and video exists
+if send_video and os.path.exists(video_path):
+    try:
+        print(f"Transferring video to {remote_user}@{remote_host}:{remote_dir}...")
+        logging.info(f"Starting transfer of {video_path} to {remote_user}@{remote_host}:{remote_dir}")
+        
+        # Get the filename part without the path
+        video_filename = os.path.basename(video_path)
+        
+        # First ensure the remote directory exists
+        print("Ensuring remote directory exists...")
+        mkdir_cmd = [
+            "ssh", 
+            f"{remote_user}@{remote_host}", 
+            f"mkdir -p {remote_dir}"
+        ]
+        
+        mkdir_result = subprocess.run(
+            mkdir_cmd,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True
+        )
+        
+        if mkdir_result.returncode != 0:
+            print(f"Warning: Could not ensure remote directory exists: {mkdir_result.stderr}")
+            logging.warning(f"Failed to ensure remote directory exists: {mkdir_result.stderr}")
+        
+        # Execute scp command to transfer the file
+        transfer_cmd = [
+            "scp",
+            video_path,
+            f"{remote_user}@{remote_host}:{remote_dir}/{video_filename}"
+        ]
+        
+        print("Executing command:", " ".join(transfer_cmd))
+        
+        result = subprocess.run(
+            transfer_cmd,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            check=False  # Don't raise exception, handle manually
+        )
+        
+        if result.returncode == 0:
+            print(f"Video transfer completed successfully")
+            logging.info(f"Video transfer completed successfully")
         else:
-            print(f"Current time {current_time_str} is outside the capture window " +
-                  f"({capture_window_start_str} - {capture_window_end_str}). Waiting...")
-            time.sleep(1)  # Check every second if within the capture window
-
-print("Image capture completed.")
+            print(f"Error transferring video. Return code: {result.returncode}")
+            print(f"Error details: {result.stderr}")
+            logging.error(f"Error transferring video. Return code: {result.returncode}")
+            logging.error(f"Error details: {result.stderr}")
+    except Exception as e:
+        print(f"Unexpected error during transfer: {e}")
+        logging.error(f"Unexpected error during transfer: {e}")
+else:
+    if not send_video:
+        print("Video transfer skipped (send_video flag is disabled)")
+    elif not os.path.exists(video_path):
+        print("Video transfer skipped (video file not found)")

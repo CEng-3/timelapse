@@ -19,7 +19,22 @@ def fetch_config():
         start_time_str = config.get("start_time", "07:00:00")
         end_time_str = config.get("end_time", "19:00:00")
         images_per_hour = float(config.get("images_per_hour", 360))
-        capture_interval = 3600 / images_per_hour  # seconds between photos
+        
+        # Convert start and end times to datetime objects
+        start_time = datetime.strptime(start_time_str, "%H:%M:%S")
+        end_time = datetime.strptime(end_time_str, "%H:%M:%S")
+        
+        # Calculate the total duration in seconds
+        if end_time < start_time:
+            end_time += timedelta(days=1)  # Handle overnight capture
+        total_duration_seconds = (end_time - start_time).total_seconds()
+        
+        # Calculate the total number of images to be captured
+        total_images = images_per_hour * (total_duration_seconds / 3600)
+        
+        # Calculate the capture interval in seconds
+        capture_interval = total_duration_seconds / total_images
+        
         return start_time_str, end_time_str, capture_interval
     except Exception as e:
         logging.error(f"Error fetching config: {e}")

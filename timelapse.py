@@ -209,8 +209,37 @@ while True:
         print("Fetching new config...")
         print(f"New start time: {start_time_str}, new end time: {end_time_str}, new capture interval: {capture_interval}")
     else:
-        print(f"Current time {current_time_str} is outside the capture window ({start_time_str} - {end_time_str}). Waiting...")
-        time.sleep(60)  # Check every minute if within the capture window
+        if current_time_str > end_time_str:
+            print(f"Current time {current_time_str} is past the end time {end_time_str}. Taking final photo and exiting.")
+            # Ensure 4-digit zero-padded filename for correct sorting
+            image_name = f"{image_count:04d}.jpg"
+            image_path = os.path.join(save_dir, image_name)
+
+            # Capture image with error handling
+            try:
+                subprocess.run([
+                    "libcamera-still", "-o", image_path, "-t", "1000", "-n",
+                    "--width", str(image_width), "--height", str(image_height)
+                ], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=True)
+
+                if os.path.exists(image_path):
+                    # Update the last capture time to now
+                    last_capture_time = datetime.now()
+                    logging.info(f"Captured image: {image_name}")
+                    # Update capture state after each successful capture
+                    log_capture_state(image_count, start_time.isoformat(), last_capture_time.isoformat())
+                else:
+                    logging.warning(f"Image {image_path} missing after capture attempt!")
+            except subprocess.CalledProcessError as e:
+                logging.error(f"Camera error: {e}")
+                time.sleep(60) # Wait before retrying
+                continue
+
+            image_count += 1
+            break
+        else:
+            print(f"Current time {current_time_str} is outside the capture window ({start_time_str} - {end_time_str}). Waiting...")
+            time.sleep(1)  # Check every second if within the capture window
 
 print("Image capture completed.")
 

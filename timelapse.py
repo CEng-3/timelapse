@@ -16,16 +16,16 @@ def fetch_config():
         response = requests.get(config_url)
         response.raise_for_status()
         config = response.json()
-        hours_to_run = float(config.get("hours_to_run", 1))
+        start_time_str = config.get("start_time", "07:00:00")
+        end_time_str = config.get("end_time", "19:00:00")
         images_per_hour = float(config.get("images_per_hour", 360))
-        capture_duration = timedelta(hours=hours_to_run)
         capture_interval = 3600 / images_per_hour  # seconds between photos
-        return capture_duration, capture_interval
+        return start_time_str, end_time_str, capture_interval
     except Exception as e:
         logging.error(f"Error fetching config: {e}")
-        return timedelta(hours=12), 3600 / 2  # default values
+        return "07:00:00", "19:00:00", 3600 / 2  # default values
 
-capture_duration, capture_interval = fetch_config()
+start_time_str, end_time_str, capture_interval = fetch_config()
 
 image_width = 1280 # Max: 4608 / 2304 (HDR mode)
 image_height = 720 # Max: 2592 / 1296 (HDR mode)
@@ -153,43 +153,49 @@ if not is_recovery:
     log_capture_state(image_count - 1, start_time.isoformat(), last_capture_time.isoformat())
 
 # Main capture loop
-while datetime.now() - start_time < capture_duration:
+while True:
     current_time = datetime.now()
-    elapsed_time = current_time - start_time
-    print(f"Elapsed time: {elapsed_time}, capture duration: {capture_duration}")
-
-    # Ensure 4-digit zero-padded filename for correct sorting
-    image_name = f"{image_count:04d}.jpg"
-    image_path = os.path.join(save_dir, image_name)
-
-    # Capture image with error handling
-    try:
-        subprocess.run([
-            "libcamera-still", "-o", image_path, "-t", "1000", "-n",
-            "--width", str(image_width), "--height", str(image_height)
-        ], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=True)
-
-        if os.path.exists(image_path):
-            # Update the last capture time to now
-            last_capture_time = datetime.now()
-            logging.info(f"Captured image: {image_name}")
-            # Update capture state after each successful capture
-            log_capture_state(image_count, start_time.isoformat(), last_capture_time.isoformat())
-        else:
-            logging.warning(f"Image {image_path} missing after capture attempt!")
-    except subprocess.CalledProcessError as e:
-        logging.error(f"Camera error: {e}")
-        time.sleep(60) # Wait before retrying
-        continue
-
-    image_count += 1
-    print(f"Captured {image_name}, waiting {capture_interval} seconds...")
-    time.sleep(capture_interval)
+    current_time_str = current_time.strftime("%H:%M:%S")
     
-    capture_duration, capture_interval = fetch_config()
-    
-    print("Fetching new config...")
-    print(f"New capture duration: {capture_duration}, new capture interval: {capture_interval}")
+    if current_time_str >= start_time_str and current_time_str <= end_time_str:
+        elapsed_time = current_time - start_time
+        print(f"Elapsed time: {elapsed_time}, capture interval: {capture_interval}")
+
+        # Ensure 4-digit zero-padded filename for correct sorting
+        image_name = f"{image_count:04d}.jpg"
+        image_path = os.path.join(save_dir, image_name)
+
+        # Capture image with error handling
+        try:
+            subprocess.run([
+                "libcamera-still", "-o", image_path, "-t", "1000", "-n",
+                "--width", str(image_width), "--height", str(image_height)
+            ], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=True)
+
+            if os.path.exists(image_path):
+                # Update the last capture time to now
+                last_capture_time = datetime.now()
+                logging.info(f"Captured image: {image_name}")
+                # Update capture state after each successful capture
+                log_capture_state(image_count, start_time.isoformat(), last_capture_time.isoformat())
+            else:
+                logging.warning(f"Image {image_path} missing after capture attempt!")
+        except subprocess.CalledProcessError as e:
+            logging.error(f"Camera error: {e}")
+            time.sleep(60) # Wait before retrying
+            continue
+
+        image_count += 1
+        print(f"Captured {image_name}, waiting {capture_interval} seconds...")
+        time.sleep(capture_interval)
+        
+        start_time_str, end_time_str, capture_interval = fetch_config()
+        
+        print("Fetching new config...")
+        print(f"New start time: {start_time_str}, new end time: {end_time_str}, new capture interval: {capture_interval}")
+    else:
+        print(f"Current time {current_time_str} is outside the capture window ({start_time_str} - {end_time_str}). Waiting...")
+        time.sleep(60)  # Check every minute if within the capture window
 
 print("Image capture completed.")
 

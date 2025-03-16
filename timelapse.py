@@ -173,6 +173,8 @@ while True:
     current_time_str = current_time.strftime("%H:%M:%S")
     
     if current_time_str >= start_time_str and current_time_str <= end_time_str:
+        if start_time is None:
+            start_time = current_time  # Set the start time when the first photo is taken
         elapsed_time = current_time - start_time
         print(f"Elapsed time: {elapsed_time}, capture interval: {capture_interval}")
 

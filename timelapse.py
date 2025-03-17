@@ -4,13 +4,13 @@ import glob
 import math
 
 # Configuration
-send_video = True  # Flag to control remote transfer of completed video
+send_video = False # Flag to control remote transfer of completed video
 remote_host = "192.168.64.121"
 remote_user = "tower-garden"
 remote_dir = "/home/tower-garden/site/static/cam2"
 
-capture_duration = timedelta(minutes=1)
-capture_interval = 10  # seconds between photos
+capture_duration = timedelta(hours=12)
+capture_interval = 900 # seconds between photos
 
 image_width = 1280 # Max: 4608 / 2304 (HDR mode)
 image_height = 720 # Max: 2592 / 1296 (HDR mode)

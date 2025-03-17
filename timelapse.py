@@ -2,30 +2,15 @@ from datetime import datetime, timedelta
 import os, time, logging, subprocess
 import glob
 import math
-import requests
 
 # Configuration
 send_video = True  # Flag to control remote transfer of completed video
 remote_host = "192.168.64.121"
 remote_user = "tower-garden"
 remote_dir = "/home/tower-garden/site/static/cam2"
-config_url = "http://tustower.com/timelapse-config.json"
 
-def fetch_config():
-    try:
-        response = requests.get(config_url)
-        response.raise_for_status()
-        config = response.json()
-        hours_to_run = config.get("hours_to_run", 1)
-        images_per_hour = config.get("images_per_hour", 360)
-        capture_duration = timedelta(hours=hours_to_run)
-        capture_interval = 3600 / images_per_hour  # seconds between photos
-        return capture_duration, capture_interval
-    except Exception as e:
-        logging.error(f"Error fetching config: {e}")
-        return timedelta(hours=12), 3600 / 2  # default values
-
-capture_duration, capture_interval = fetch_config()
+capture_duration = timedelta(minutes=1)
+capture_interval = 10  # seconds between photos
 
 image_width = 1280 # Max: 4608 / 2304 (HDR mode)
 image_height = 720 # Max: 2592 / 1296 (HDR mode)
@@ -185,11 +170,6 @@ while datetime.now() - start_time < capture_duration:
     image_count += 1
     print(f"Captured {image_name}, waiting {capture_interval} seconds...")
     time.sleep(capture_interval)
-    
-    capture_duration, capture_interval = fetch_config()
-    
-    print("Fetching new config...")
-    print(f"New capture duration: {capture_duration}, new capture interval: {capture_interval}")
 
 print("Image capture completed.")
 

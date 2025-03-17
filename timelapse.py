@@ -16,8 +16,8 @@ def fetch_config():
         response = requests.get(config_url)
         response.raise_for_status()
         config = response.json()
-        hours_to_run = float(config.get("hours_to_run", 1))
-        images_per_hour = float(config.get("images_per_hour", 360))
+        hours_to_run = config.get("hours_to_run", 1)
+        images_per_hour = config.get("images_per_hour", 360)
         capture_duration = timedelta(hours=hours_to_run)
         capture_interval = 3600 / images_per_hour  # seconds between photos
         return capture_duration, capture_interval
